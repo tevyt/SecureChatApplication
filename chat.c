@@ -87,7 +87,21 @@ static int authenticateClient(){
 		return 1;
 	}
 
+	unsigned char* encrypted_session_key = encrypt(session_key, serverPublicKey);
+
+
+	if(encrypted_session_key == NULL){
+		fprintf(stderr, "Error encrypting session key.\n");
+		return 1;
+	}
+
+	fprintf(stderr, "Encrypted session key... %s", encrypted_session_key);
+
+	size_t message_length = strlen(encrypted_session_key);
+    send(sockfd,encrypted_session_key,message_length,0);
+
 	RSA_free(serverPublicKey);
+	free(encrypted_session_key);
 
 
 	return 0;
