@@ -78,24 +78,17 @@ static int authenticateClient(){
 	unsigned char session_key[SESSION_KEY_LEN];
 	generate_session_key(session_key);
 
-	fprintf(stdout, "Session key: %s.", session_key);
-	FILE *serverPublicKeyFile = fopen("./keys/client/known-server/public.pem", "r");
-	if(serverPublicKeyFile == NULL){
-		fprintf(stderr, "Error opening server public key file.\n");
+
+	RSA* serverPublicKey = readPublicKeyFromFile("./keys/client/known-server/public.pem");
+
+
+	if(serverPublicKey == NULL){
+		fprintf(stderr, "Error reading server public key.\n");
 		return 1;
 	}
 
-	// if(serverPublicKeyFile == NULL){
-	// 	fprintf(stderr, "Error opening server public key file.\n");
-	// 	return 1;
-	// }
+	RSA_free(serverPublicKey);
 
-	// RSA *serverPublicKey = PEM_read_RSA_PUBKEY(serverPublicKeyFile, NULL, NULL, NULL);
-	// fclose(serverPublicKeyFile);
-
-
-	// char* encryptedSessionKey = encrypt(session_key,  serverPublicKey);
-	// fprintf(stdout, "Encrypted session key: %s.", encryptedSessionKey);
 
 	return 0;
 }
