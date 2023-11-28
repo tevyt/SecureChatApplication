@@ -1,6 +1,5 @@
 #include <openssl/rsa.h>
 
-#define MAX_BUF_SIZE 4096
 
 
 unsigned char* encrypt(unsigned char* message, RSA* key){

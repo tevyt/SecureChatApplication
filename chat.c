@@ -18,6 +18,7 @@
 
 #ifndef PATH_MAX
 #define PATH_MAX 1024
+
 #endif
 
 static GtkTextBuffer* tbuf; /* transcript buffer */
@@ -68,8 +69,28 @@ int initServerNet(int port)
 	if (sockfd < 0)
 		error("error on accept");
 	close(listensock);
-	fprintf(stderr, "connection made, starting session...\n");
+	fprintf(stderr, "connection made, awaiting authentication from client...\n");
+	if(authenticateServer() != 0){
+		error("Failure authenticating server");
+	}
 	/* at this point, should be able to send/recv on sockfd */
+	return 0;
+}
+
+int authenticateServer(){
+	size_t message_length = 256;
+	unsigned char* proposed_session_key_ciphertext[message_length];
+
+	size_t r = recv(sockfd,proposed_session_key_ciphertext, sizeof(proposed_session_key_ciphertext), 0);
+
+	if(r == 0 || r == -1){
+		fprintf(stderr, "Error authenticating server");
+		free(proposed_session_key_ciphertext);
+		return 1;
+	}
+
+	fprintf(stderr, "Received encrypted session key %d\n", r);
+
 	return 0;
 }
 
@@ -95,7 +116,7 @@ static int authenticateClient(){
 		return 1;
 	}
 
-	fprintf(stderr, "Encrypted session key... %s", encrypted_session_key);
+	fprintf(stderr, "Encrypted session key... %d", strlen((char *)encrypted_session_key));
 
 	size_t message_length = strlen(encrypted_session_key);
     send(sockfd,encrypted_session_key,message_length,0);
@@ -340,6 +361,8 @@ void* recvMsg(void*)
 		if (m[nbytes-1] != '\n')
 			m[nbytes++] = '\n';
 		m[nbytes] = 0;
+
+		//If authentication is complete write the message, otherwise wait for authentication to complete
 		g_main_context_invoke(NULL,shownewmessage,(gpointer)m);
 	}
 	return 0;
