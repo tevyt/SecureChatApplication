@@ -1,6 +1,7 @@
 {
   "files.associations": {
     "rand.h": "c",
-    "session-key.h": "c"
+    "session-key.h": "c",
+    "rsa.h": "c"
   }
 }

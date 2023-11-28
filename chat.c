@@ -13,6 +13,9 @@
 #include "session-key.h"
 #include "session-key.c"
 
+#include <openssl/rsa.h>
+#include "rsa.c"
+
 #ifndef PATH_MAX
 #define PATH_MAX 1024
 #endif
@@ -34,6 +37,7 @@ void* recvMsg(void*);       /* for trecv */
 
 static int listensock, sockfd;
 static int isclient = 1;
+static int authenticated = 0;
 
 static void error(const char *msg)
 {
@@ -70,10 +74,29 @@ int initServerNet(int port)
 }
 
 
-static int authenticate(){
+static int authenticateClient(){
 	unsigned char session_key[SESSION_KEY_LEN];
 	generate_session_key(session_key);
-	fprintf(stdout, "Session key generated: %s.", session_key);
+
+	fprintf(stdout, "Session key: %s.", session_key);
+	FILE *serverPublicKeyFile = fopen("./keys/client/known-server/public.pem", "r");
+	if(serverPublicKeyFile == NULL){
+		fprintf(stderr, "Error opening server public key file.\n");
+		return 1;
+	}
+
+	// if(serverPublicKeyFile == NULL){
+	// 	fprintf(stderr, "Error opening server public key file.\n");
+	// 	return 1;
+	// }
+
+	// RSA *serverPublicKey = PEM_read_RSA_PUBKEY(serverPublicKeyFile, NULL, NULL, NULL);
+	// fclose(serverPublicKeyFile);
+
+
+	// char* encryptedSessionKey = encrypt(session_key,  serverPublicKey);
+	// fprintf(stdout, "Encrypted session key: %s.", encryptedSessionKey);
+
 	return 0;
 }
 
@@ -95,8 +118,8 @@ static int initClientNet(char* hostname, int port)
 	serv_addr.sin_port = htons(port);
 	if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0){
 		error("ERROR connecting");
-	}else if(authenticate() != 0){
-		error("Unable to authenticate client");
+	}else if(authenticateClient() != 0){
+		error("Failure authenticating client");
 	}
 	/* at this point, should be able to send/recv on sockfd */
 	return 0;
