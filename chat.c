@@ -40,7 +40,8 @@ static int listensock, sockfd;
 static int isclient = 1;
 static int authenticated = 0;
 
-unsigned char* clientAESKey;
+static unsigned char* clientAESKey;
+static unsigned char* serverAESKey;
 
 
 static void printHex(unsigned char* data, size_t len)
@@ -105,6 +106,13 @@ int authenticateServer(){
 	clientAESKey = RSAdecrypt(proposed_session_key_ciphertext, "./keys/server/private.pem");
 
 	fprintf(stderr, "Decrypted session key.\n");
+
+	serverAESKey = generateAESKey();
+
+	unsigned char* encryptedServerKey = RSAencrypt(serverAESKey, "./keys/server/approved-clients/public.pem");
+
+	fprintf(stderr, "Sending encrypted server key.\n");
+	printHex(encryptedServerKey, RSA_KEY_LENGTH);
 
 
 	free(proposed_session_key_ciphertext);
