@@ -10,8 +10,8 @@
 #include "dh.h"
 #include "keys.h"
 
-#include "session-key.h"
-#include "session-key.c"
+#include "aes.h"
+#include "aes.c"
 
 #include <openssl/rsa.h>
 #include "rsa.c"
@@ -39,6 +39,17 @@ void* recvMsg(void*);       /* for trecv */
 static int listensock, sockfd;
 static int isclient = 1;
 static int authenticated = 0;
+
+unsigned char* clientAESKey;
+
+
+static void printHex(unsigned char* data, size_t len)
+{
+	for (size_t i = 0; i < len; i++) {
+		printf("%02x",data[i]);
+	}
+	printf("\n");
+}
 
 static void error(const char *msg)
 {
@@ -78,51 +89,57 @@ int initServerNet(int port)
 }
 
 int authenticateServer(){
-	size_t message_length = 256;
-	unsigned char* proposed_session_key_ciphertext[message_length];
+	unsigned char* proposed_session_key_ciphertext = malloc(RSA_KEY_LENGTH);
 
-	size_t r = recv(sockfd,proposed_session_key_ciphertext, sizeof(proposed_session_key_ciphertext), 0);
+	size_t r = recv(sockfd,proposed_session_key_ciphertext, RSA_KEY_LENGTH, 0);
 
 	if(r == 0 || r == -1){
-		fprintf(stderr, "Error authenticating server");
+		fprintf(stderr, "Error authenticating server\n");
 		free(proposed_session_key_ciphertext);
 		return 1;
 	}
 
-	fprintf(stderr, "Received encrypted session key %d\n", r);
+	fprintf(stderr, "Received encrypted session key.\n");
+	printHex(proposed_session_key_ciphertext, r);
 
+	clientAESKey = RSAdecrypt(proposed_session_key_ciphertext, "./keys/server/private.pem");
+
+	fprintf(stderr, "Decrypted session key.\n");
+
+
+	free(proposed_session_key_ciphertext);
 	return 0;
 }
 
 
 static int authenticateClient(){
-	unsigned char session_key[SESSION_KEY_LEN];
-	generate_session_key(session_key);
+	const char* serverPublicKeyPath = "./keys/server/public.pem";
 
+	clientAESKey = generateAESKey();
 
-	RSA* serverPublicKey = readPublicKeyFromFile("./keys/client/known-server/public.pem");
-
-
-	if(serverPublicKey == NULL){
-		fprintf(stderr, "Error reading server public key.\n");
+	if(clientAESKey == NULL){
+		fprintf(stderr, "Error generating AES key.\n");
+		free(serverPublicKeyPath);
 		return 1;
 	}
 
-	unsigned char* encrypted_session_key = encrypt(session_key, serverPublicKey);
+	unsigned char* encryptedClientKey = RSAencrypt(clientAESKey, serverPublicKeyPath);
 
-
-	if(encrypted_session_key == NULL){
+	if(encryptedClientKey == NULL){
 		fprintf(stderr, "Error encrypting session key.\n");
+		free(serverPublicKeyPath);
 		return 1;
 	}
 
-	fprintf(stderr, "Encrypted session key... %d", strlen((char *)encrypted_session_key));
+	fprintf(stderr, "Sending encrypted client key.\n");
 
-	size_t message_length = strlen(encrypted_session_key);
-    send(sockfd,encrypted_session_key,message_length,0);
+	size_t messageLength = strlen(encryptedClientKey);
 
-	RSA_free(serverPublicKey);
-	free(encrypted_session_key);
+	printHex(encryptedClientKey, messageLength);
+
+    send(sockfd,encryptedClientKey,messageLength,0);
+
+	free(encryptedClientKey);
 
 
 	return 0;
