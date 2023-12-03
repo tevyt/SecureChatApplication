@@ -111,8 +111,36 @@ int authenticateServer(){
 	}
 
 	fprintf(stderr, "Decrypted session key.\n");
-	printHex(clientAESKey, AES_KEY_LENGTH);
 
+	serverAESKey = generateAESKey();
+
+	if(serverAESKey == NULL){
+		fprintf(stderr, "Error generating session key.\n");
+		free(proposed_session_key_ciphertext);
+		free(clientAESKey);
+		return 1;
+	}
+
+	unsigned char* authMessageForClient = malloc(AES_KEY_LENGTH * 2);
+
+	memcpy(authMessageForClient, serverAESKey, AES_KEY_LENGTH);
+	memcpy(authMessageForClient + AES_KEY_LENGTH, serverAESKey, AES_KEY_LENGTH);
+
+
+	unsigned char* authMessageForClientCiphertext = RSAencrypt(authMessageForClient, "./keys/server/approved-clients/public.pem");
+
+	if(authMessageForClientCiphertext == NULL){
+		fprintf(stderr, "Error encrypting auth message for client.\n");
+		free(proposed_session_key_ciphertext);
+		free(clientAESKey);
+		free(serverAESKey);
+		free(authMessageForClient);
+		return 1;
+	}
+
+	send(sockfd, authMessageForClientCiphertext, RSA_KEY_LENGTH, 0);
+
+	free(proposed_session_key_ciphertext);
 	return 0;
 }
 
@@ -142,9 +170,48 @@ static int authenticateClient(){
 
     send(sockfd,encryptedClientKey,RSA_KEY_LENGTH,0);
 
+
+	unsigned char* authMessageCipherText = malloc(RSA_KEY_LENGTH);
+
+	size_t r = recv(sockfd,authMessageCipherText, RSA_KEY_LENGTH, 0);
+
+	if(r == 0 || r == -1){
+		fprintf(stderr, "Error authenticating client\n");
+		free(authMessageCipherText);
+		free(encryptedClientKey);
+		return 1;
+	}
+
+	unsigned char* authMessage = RSAdecrypt(authMessageCipherText, "./keys/client/private.pem", AES_KEY_LENGTH * 2);
+
+	if(authMessage == NULL){
+		fprintf(stderr, "Error decrypting auth message.\n");
+		free(authMessageCipherText);
+		free(encryptedClientKey);
+		return 1;
+	}
+
+	int keyMatches = memcmp(clientAESKey, authMessage, AES_KEY_LENGTH);
+
+	if(keyMatches == 0){
+		authenticated = 1;
+		fprintf(stderr, "Client authenticated.\n");
+		unsigned char* serverKey = authMessage + AES_KEY_LENGTH;
+		send(sockfd,serverKey,AES_KEY_LENGTH,0);
+	}else{
+		fprintf(stderr, "Error authenticating client. Server did not provide the correct key.\n");
+		free(authMessageCipherText);
+		free(encryptedClientKey);
+		free(authMessage);
+		return 1;
+	}
+
+
+
+
+	free(authMessageCipherText);
 	free(encryptedClientKey);
-
-
+	free(authMessage);
 	return 0;
 }
 
