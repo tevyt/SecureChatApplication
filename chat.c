@@ -123,7 +123,7 @@ int authenticateServer(){
 
 	unsigned char* authMessageForClient = malloc(AES_KEY_LENGTH * 2);
 
-	memcpy(authMessageForClient, serverAESKey, AES_KEY_LENGTH);
+	memcpy(authMessageForClient, clientAESKey, AES_KEY_LENGTH);
 	memcpy(authMessageForClient + AES_KEY_LENGTH, serverAESKey, AES_KEY_LENGTH);
 
 
@@ -140,6 +140,24 @@ int authenticateServer(){
 
 	send(sockfd, authMessageForClientCiphertext, RSA_KEY_LENGTH, 0);
 
+	unsigned char* clientConfirmation = malloc(AES_KEY_LENGTH);
+	recv(sockfd, clientConfirmation, AES_KEY_LENGTH, 0);
+
+	if(memcmp(clientConfirmation, serverAESKey, AES_KEY_LENGTH) != 0){
+		fprintf(stderr, "Error authenticating server. Client did not provide the correct key.\n");
+		free(proposed_session_key_ciphertext);
+		free(clientAESKey);
+		free(serverAESKey);
+		free(authMessageForClient);
+		free(authMessageForClientCiphertext);
+		free(clientConfirmation);
+		return 1;
+	}else{
+		fprintf(stderr, "Server authenticated.\n");
+		authenticated = 1;
+	}
+
+	free(clientConfirmation);
 	free(proposed_session_key_ciphertext);
 	return 0;
 }
