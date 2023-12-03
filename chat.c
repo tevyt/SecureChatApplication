@@ -42,6 +42,7 @@ static int authenticated = 0;
 
 static unsigned char* clientAESKey;
 static unsigned char* serverAESKey;
+static unsigned char* initializationVector;
 
 
 static void printHex(unsigned char* data, size_t len)
@@ -159,6 +160,7 @@ int authenticateServer(){
 	}else{
 		fprintf(stderr, "Server authenticated.\n");
 		authenticated = 1;
+		initializationVector = clientConfirmation + AES_KEY_LENGTH;
 	}
 
 	free(clientConfirmation);
@@ -220,9 +222,16 @@ static int authenticateClient(){
 		fprintf(stderr, "Client authenticated.\n");
 		unsigned char* serverKey = authMessage + AES_KEY_LENGTH;
 
-		unsigned char* serverKeyCipher = RSAencrypt(serverKey, "./keys/server/public.pem");
+		initializationVector = generateInitializationVector();
 
-		send(sockfd,serverKeyCipher,RSA_KEY_LENGTH,0);
+		unsigned char* confirmationMessage = malloc(AES_KEY_LENGTH + AES_BLOCK_SIZE);
+
+		memcpy(confirmationMessage, serverKey, AES_KEY_LENGTH);
+		memcpy(confirmationMessage + AES_KEY_LENGTH, initializationVector, AES_BLOCK_SIZE);
+
+		unsigned char* confirmationCipher = RSAencrypt(confirmationMessage, "./keys/server/public.pem");
+
+		send(sockfd,confirmationCipher,RSA_KEY_LENGTH,0);
 	}else{
 		fprintf(stderr, "Error authenticating client. Server did not provide the correct key.\n");
 		free(authMessageCipherText);

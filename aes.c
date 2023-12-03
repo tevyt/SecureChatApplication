@@ -1,13 +1,20 @@
 #include <openssl/rand.h>
 #include "aes.h"
 
-unsigned char* generateAESKey(){
+static unsigned char* generateRandomBytes(int numberOfBytes){
+    unsigned char* bytes = malloc(numberOfBytes);
 
-    unsigned char* key = malloc(AES_KEY_LENGTH);
-
-    if(RAND_bytes(key, AES_KEY_LENGTH) != 1){
-        free(key);
+    if(RAND_bytes(bytes, numberOfBytes) != 1){
+        free(bytes);
         return NULL;
     }
-    return key;
- }
+    return bytes;
+}
+
+unsigned char* generateAESKey(){
+    return generateRandomBytes(AES_KEY_LENGTH);
+}
+
+unsigned char* generateInitializationVector(){
+    return generateRandomBytes(AES_BLOCK_SIZE);
+}
