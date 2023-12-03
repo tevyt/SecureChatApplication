@@ -114,6 +114,7 @@ int authenticateServer(){
 	fprintf(stderr, "Decrypted session key.\n");
 
 	serverAESKey = generateAESKey();
+	fprintf(stderr, "Generated session key.\n");
 
 	if(serverAESKey == NULL){
 		fprintf(stderr, "Error generating session key.\n");
@@ -219,6 +220,7 @@ static int authenticateClient(){
 
 	if(keyMatches == 0){
 		authenticated = 1;
+		serverAESKey = authMessage + AES_KEY_LENGTH;
 		fprintf(stderr, "Client authenticated.\n");
 		unsigned char* serverKey = authMessage + AES_KEY_LENGTH;
 
@@ -232,6 +234,10 @@ static int authenticateClient(){
 		unsigned char* confirmationCipher = RSAencrypt(confirmationMessage, "./keys/server/public.pem");
 
 		send(sockfd,confirmationCipher,RSA_KEY_LENGTH,0);
+
+		fprintf(stderr, "Testing AES\n");
+		printHex(serverKey, AES_KEY_LENGTH);
+		testAES(serverAESKey, initializationVector);
 	}else{
 		fprintf(stderr, "Error authenticating client. Server did not provide the correct key.\n");
 		free(authMessageCipherText);
