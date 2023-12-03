@@ -164,6 +164,16 @@ int authenticateServer(){
 		initializationVector = clientConfirmation + AES_KEY_LENGTH;
 	}
 
+
+	fprintf(stderr, "Client key: ");
+	printHex(clientAESKey, AES_KEY_LENGTH);
+
+	fprintf(stderr, "Server key: ");
+	printHex(serverAESKey, AES_KEY_LENGTH);
+
+	fprintf(stderr, "Initialization vector: ");
+	printHex(initializationVector, AES_BLOCK_SIZE);
+
 	free(clientConfirmation);
 	free(proposed_session_key_ciphertext);
 	return 0;
@@ -235,8 +245,6 @@ static int authenticateClient(){
 
 		send(sockfd,confirmationCipher,RSA_KEY_LENGTH,0);
 
-		fprintf(stderr, "Testing AES\n");
-		printHex(serverKey, AES_KEY_LENGTH);
 		testAES(serverAESKey, initializationVector);
 	}else{
 		fprintf(stderr, "Error authenticating client. Server did not provide the correct key.\n");
@@ -248,6 +256,14 @@ static int authenticateClient(){
 
 
 
+	fprintf(stderr, "Client key: ");
+	printHex(clientAESKey, AES_KEY_LENGTH);
+
+	fprintf(stderr, "Server key: ");
+	printHex(serverAESKey, AES_KEY_LENGTH);
+
+	fprintf(stderr, "Initialization vector: ");
+	printHex(initializationVector, AES_BLOCK_SIZE);
 
 	free(authMessageCipherText);
 	free(encryptedClientKey);
