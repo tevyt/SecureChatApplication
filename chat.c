@@ -101,21 +101,18 @@ int authenticateServer(){
 	}
 
 	fprintf(stderr, "Received encrypted session key.\n");
-	printHex(proposed_session_key_ciphertext, r);
 
-	clientAESKey = RSAdecrypt(proposed_session_key_ciphertext, "./keys/server/private.pem");
+	clientAESKey = RSAdecrypt(proposed_session_key_ciphertext, "./keys/server/private.pem", AES_KEY_LENGTH);
+
+	if(clientAESKey == NULL){
+		fprintf(stderr, "Error decrypting session key.\n");
+		free(proposed_session_key_ciphertext);
+		return 1;
+	}
 
 	fprintf(stderr, "Decrypted session key.\n");
+	printHex(clientAESKey, AES_KEY_LENGTH);
 
-	serverAESKey = generateAESKey();
-
-	unsigned char* encryptedServerKey = RSAencrypt(serverAESKey, "./keys/server/approved-clients/public.pem");
-
-	fprintf(stderr, "Sending encrypted server key.\n");
-	printHex(encryptedServerKey, RSA_KEY_LENGTH);
-
-
-	free(proposed_session_key_ciphertext);
 	return 0;
 }
 
@@ -124,6 +121,7 @@ static int authenticateClient(){
 	const char* serverPublicKeyPath = "./keys/server/public.pem";
 
 	clientAESKey = generateAESKey();
+	printHex(clientAESKey, AES_KEY_LENGTH);
 
 	if(clientAESKey == NULL){
 		fprintf(stderr, "Error generating AES key.\n");
@@ -141,11 +139,8 @@ static int authenticateClient(){
 
 	fprintf(stderr, "Sending encrypted client key.\n");
 
-	size_t messageLength = strlen(encryptedClientKey);
 
-	printHex(encryptedClientKey, messageLength);
-
-    send(sockfd,encryptedClientKey,messageLength,0);
+    send(sockfd,encryptedClientKey,RSA_KEY_LENGTH,0);
 
 	free(encryptedClientKey);
 

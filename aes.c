@@ -7,7 +7,6 @@ unsigned char* generateAESKey(){
 
     if(RAND_bytes(key, AES_KEY_LENGTH) != 1){
         free(key);
-
         return NULL;
     }
     return key;

@@ -66,18 +66,18 @@ unsigned char* RSAencrypt(unsigned char* plainText, char* publicKeyPath){
     return ciphertext;
 }
 
-unsigned char* RSAdecrypt(unsigned char* ciphertext, char* privateKeyPath){
+unsigned char* RSAdecrypt(unsigned char* ciphertext, char* privateKeyPath, int plaintextLength){
     RSA* privateKey = readPrivateKeyFromFile(privateKeyPath);
 
     if(privateKey == NULL){
         return NULL;
     }
 
-    unsigned char* plaintext = malloc(RSA_size(privateKey));
+    unsigned char* plaintext = malloc(plaintextLength);
 
-    int plaintextLength = RSA_private_decrypt(RSA_size(privateKey), ciphertext, plaintext, privateKey, RSA_PKCS1_OAEP_PADDING);
+    int s = RSA_private_decrypt(RSA_KEY_LENGTH, ciphertext, plaintext, privateKey, RSA_PKCS1_OAEP_PADDING);
 
-    if(plaintextLength == -1){
+    if(s == -1){
         RSA_free(privateKey);
         free(plaintext);
         return NULL;
@@ -86,5 +86,6 @@ unsigned char* RSAdecrypt(unsigned char* ciphertext, char* privateKeyPath){
     RSA_free(privateKey);
     return plaintext;
 }
+
 
 
