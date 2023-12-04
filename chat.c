@@ -241,24 +241,6 @@ static int authenticateClient(){
 		unsigned char* serverCipher = RSAencrypt(serverAESKey, "./keys/server/public.pem");
 
 		send(sockfd,serverCipher,RSA_KEY_LENGTH,0);
-
-		struct AESCipher testCipher = AESencrypt("Why won't this work?", serverAESKey, initializationVector);
-
-		
-
-		int cipherTextLength = testCipher.ciphertextLength;
-		int plainTextLength = testCipher.plaintextLength;
-		unsigned char* cipherText = testCipher.ciphertext;
-
-		fprintf(stderr, "Test cipher text: ");
-		printHex(cipherText, cipherTextLength);
-
-	    unsigned char* pt = AESdecrypt(testCipher, serverAESKey, initializationVector);
-
-		fprintf(stderr, "Test plain text: %s\n", pt);
-
-		// testAES(serverAESKey, initializationVector, "Why wont this work?");
-
 	}else{
 		fprintf(stderr, "Error authenticating client. Server did not provide the correct key.\n");
 		free(authMessageCipherText);
@@ -267,20 +249,6 @@ static int authenticateClient(){
 		return 1;
 	}
 
-
-
-	fprintf(stderr, "Client key: ");
-	printHex(clientAESKey, AES_KEY_LENGTH);
-
-	fprintf(stderr, "Server key: ");
-	printHex(serverAESKey, AES_KEY_LENGTH);
-
-	fprintf(stderr, "Initialization vector: ");
-	printHex(initializationVector, AES_BLOCK_SIZE);
-
-	free(authMessageCipherText);
-	free(encryptedClientKey);
-	free(authMessage);
 	return 0;
 }
 
@@ -378,7 +346,16 @@ static void sendMessage(GtkWidget* w /* <-- msg entry widget */, gpointer /* dat
 	/* XXX we should probably do the actual network stuff in a different
 	 * thread and have it call this once the message is actually sent. */
 	ssize_t nbytes;
-	if ((nbytes = send(sockfd,message,len,0)) == -1)
+
+
+	unsigned char* key = isclient ? clientAESKey : serverAESKey;
+	
+	const struct AESCipher encryptedMessage = AESencrypt(message, key, initializationVector);
+
+	unsigned char* buffer = convertStructToBuffer(&encryptedMessage);
+	size_t totalSize = 512 + 2 * sizeof(int);
+
+	if ((nbytes = send(sockfd,buffer,totalSize,0)) == -1)
 		error("send failed");
 
 	tsappend(message,NULL,1);
@@ -501,22 +478,29 @@ int main(int argc, char *argv[])
  * main loop for processing: */
 void* recvMsg(void*)
 {
-	size_t maxlen = 512;
-	char msg[maxlen+2]; /* might add \n and \0 */
+	size_t maxlen = 512 + 2 * sizeof(int);
+	unsigned char input[maxlen]; /* might add \n and \0 */
 	ssize_t nbytes;
 	while (1) {
-		if ((nbytes = recv(sockfd,msg,maxlen,0)) == -1)
+		if ((nbytes = recv(sockfd,input,maxlen,0)) == -1)
 			error("recv failed");
 		if (nbytes == 0) {
 			/* XXX maybe show in a status message that the other
 			 * side has disconnected. */
 			return 0;
 		}
-		char* m = malloc(maxlen+2);
-		memcpy(m,msg,nbytes);
-		if (m[nbytes-1] != '\n')
-			m[nbytes++] = '\n';
-		m[nbytes] = 0;
+
+		struct AESCipher aesCipher = convertBufferToStruct(input);
+		int plainTextLength = aesCipher.plaintextLength;
+
+		unsigned char* key = isclient ? serverAESKey : clientAESKey;
+
+		unsigned char* m = AESdecrypt(aesCipher, key, initializationVector);
+		
+
+		if (m[plainTextLength - 1] != '\n')
+			m[plainTextLength] = '\n';
+		m[plainTextLength + 1] = 0;
 
 		//If authentication is complete write the message, otherwise wait for authentication to complete
 		g_main_context_invoke(NULL,shownewmessage,(gpointer)m);

@@ -73,49 +73,54 @@ unsigned char* AESdecrypt(struct AESCipher aesCipher, unsigned char* key, unsign
 			ERR_print_errors_fp(stderr);
 	}
 
-	printf("decrypted %lu bytes:\n%s\n",len,pt);
 	EVP_CIPHER_CTX_free(ctx);
     return pt;
 }
 
-/* demonstrates AES in counter mode */
-void testAES(unsigned char* key, unsigned char* iv, char* message)
-{
-	unsigned char ct[512];
-	unsigned char pt[512];
-	/* so you can see which bytes were written: */
-	memset(ct,0,512);
-	memset(pt,0,512);
-	size_t len = strlen(message);
-	/* encrypt: */
-	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-	if (1!=EVP_EncryptInit_ex(ctx,EVP_aes_256_ctr(),0,key,iv))
-		ERR_print_errors_fp(stderr);
-	int nWritten; /* stores number of written bytes (size of ciphertext) */
-	if (1!=EVP_EncryptUpdate(ctx,ct,&nWritten,(unsigned char*)message,len))
-		ERR_print_errors_fp(stderr);
-	EVP_CIPHER_CTX_free(ctx);
-	size_t ctlen = nWritten;
-	printf("ciphertext of length %i:\n",nWritten);
-	for (int i = 0; i < ctlen; i++) {
-		printf("%02x",ct[i]);
-	}
-	printf("\n");
-	/* now decrypt.  NOTE: in counter mode, encryption and decryption are
-	 * actually identical, so doing the above again would work.  Also
-	 * note that it is crucial to make sure IVs are not reused.  */
-	/* wipe out plaintext to be sure it worked: */
-	memset(pt,0,512);
-	ctx = EVP_CIPHER_CTX_new();
-	if (1!=EVP_DecryptInit_ex(ctx,EVP_aes_256_ctr(),0,key,iv))
-		ERR_print_errors_fp(stderr);
-	for (size_t i = 0; i < len; i++) {
-		if (1!=EVP_DecryptUpdate(ctx,pt+i,&nWritten,ct+i,1))
-			ERR_print_errors_fp(stderr);
-	}
-	printf("decrypted %lu bytes:\n%s\n",len,pt);
-	EVP_CIPHER_CTX_free(ctx);
-	/* NOTE: counter mode will preserve the length (although the person
-	 * decrypting needs to know the IV) */
+unsigned char* convertStructToBuffer(const struct AESCipher *crypto) {
+    // Calculate the total size needed for the buffer
+    size_t bufferSize = sizeof(int) + sizeof(int) + 512;
+
+    // Allocate memory for the buffer
+    unsigned char *buffer = (unsigned char *)malloc(bufferSize);
+    if (buffer == NULL) {
+        // Handle memory allocation failure
+        return NULL;
+    }
+
+    // Copy the struct members to the buffer
+    size_t offset = 0;
+
+    // Copy ciphertextLength to the buffer
+    memcpy(buffer + offset, &(crypto->ciphertextLength), sizeof(int));
+    offset += sizeof(int);
+
+    // Copy plaintextLength to the buffer
+    memcpy(buffer + offset, &(crypto->plaintextLength), sizeof(int));
+    offset += sizeof(int);
+
+    // Copy ciphertext to the buffer
+    memcpy(buffer + offset, crypto->ciphertext, crypto->ciphertextLength);
+
+    return buffer;
+}
+
+
+struct AESCipher convertBufferToStruct(const unsigned char* buffer) {
+    struct AESCipher crypto;
+
+    // Read ciphertextLength from the buffer
+    memcpy(&(crypto.ciphertextLength), buffer, sizeof(int));
+    buffer += sizeof(int);
+
+    // Read plaintextLength from the buffer
+    memcpy(&(crypto.plaintextLength), buffer, sizeof(int));
+    buffer += sizeof(int);
+
+    // Allocate memory for the ciphertext array and copy data
+    crypto.ciphertext = (unsigned char *)malloc(512);
+    memcpy(crypto.ciphertext, buffer, 512);
+
+    return crypto;
 }
 
