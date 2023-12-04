@@ -42,7 +42,10 @@ static int authenticated = 0;
 
 static unsigned char* clientAESKey;
 static unsigned char* serverAESKey;
-static unsigned char* initializationVector;
+static unsigned char initializationVector[] = {
+    0x29, 0x2b, 0xb3, 0x54, 0x8f, 0x49, 0x63, 0xd4,
+    0x14, 0x65, 0x7b, 0xb8, 0x5b, 0xea, 0x34, 0x7e
+}; 
 
 
 static void printHex(unsigned char* data, size_t len)
@@ -161,7 +164,6 @@ int authenticateServer(){
 	}else{
 		fprintf(stderr, "Server authenticated.\n");
 		authenticated = 1;
-		initializationVector = clientConfirmation + AES_KEY_LENGTH;
 	}
 
 
@@ -234,18 +236,29 @@ static int authenticateClient(){
 		fprintf(stderr, "Client authenticated.\n");
 		unsigned char* serverKey = authMessage + AES_KEY_LENGTH;
 
-		initializationVector = generateInitializationVector();
-
 		unsigned char* confirmationMessage = malloc(AES_KEY_LENGTH + AES_BLOCK_SIZE);
 
-		memcpy(confirmationMessage, serverKey, AES_KEY_LENGTH);
-		memcpy(confirmationMessage + AES_KEY_LENGTH, initializationVector, AES_BLOCK_SIZE);
+		unsigned char* serverCipher = RSAencrypt(serverAESKey, "./keys/server/public.pem");
 
-		unsigned char* confirmationCipher = RSAencrypt(confirmationMessage, "./keys/server/public.pem");
+		send(sockfd,serverCipher,RSA_KEY_LENGTH,0);
 
-		send(sockfd,confirmationCipher,RSA_KEY_LENGTH,0);
+		struct AESCipher testCipher = AESencrypt("Why won't this work?", serverAESKey, initializationVector);
 
-		testAES(serverAESKey, initializationVector);
+		
+
+		int cipherTextLength = testCipher.ciphertextLength;
+		int plainTextLength = testCipher.plaintextLength;
+		unsigned char* cipherText = testCipher.ciphertext;
+
+		fprintf(stderr, "Test cipher text: ");
+		printHex(cipherText, cipherTextLength);
+
+	    unsigned char* pt = AESdecrypt(testCipher, serverAESKey, initializationVector);
+
+		fprintf(stderr, "Test plain text: %s\n", pt);
+
+		// testAES(serverAESKey, initializationVector, "Why wont this work?");
+
 	}else{
 		fprintf(stderr, "Error authenticating client. Server did not provide the correct key.\n");
 		free(authMessageCipherText);

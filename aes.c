@@ -23,15 +23,69 @@ unsigned char* generateInitializationVector(){
     return generateRandomBytes(AES_BLOCK_SIZE);
 }
 
+
+struct AESCipher {
+    unsigned char* ciphertext;
+    int ciphertextLength;
+    int plaintextLength;
+};
+
+struct AESCipher AESencrypt(char* message, unsigned char* key, unsigned char* iv){
+	unsigned char* ct = malloc(512);
+
+	size_t len = strlen(message);
+
+	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+
+	if (1!=EVP_EncryptInit_ex(ctx,EVP_aes_256_ctr(),0,key,iv))
+		ERR_print_errors_fp(stderr);
+
+	int nWritten; /* stores number of written bytes (size of ciphertext) */
+
+	if (1!=EVP_EncryptUpdate(ctx,ct,&nWritten,(unsigned char*)message,len))
+		ERR_print_errors_fp(stderr);
+
+	EVP_CIPHER_CTX_free(ctx);
+
+	size_t ctlen = nWritten;
+
+    struct AESCipher aesCipher;
+    aesCipher.ciphertext = ct;
+    aesCipher.ciphertextLength = ctlen;
+    aesCipher.plaintextLength = len;
+
+    return aesCipher;
+}
+
+unsigned char* AESdecrypt(struct AESCipher aesCipher, unsigned char* key, unsigned char* iv){
+    unsigned char* pt = malloc(512);
+	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+
+    int nWritten = aesCipher.ciphertextLength;
+    int len = aesCipher.plaintextLength;
+    unsigned char* ct = aesCipher.ciphertext;
+
+	if (1!=EVP_DecryptInit_ex(ctx,EVP_aes_256_ctr(),0,key,iv))
+		ERR_print_errors_fp(stderr);
+
+	for (size_t i = 0; i < len; i++) {
+		if (1!=EVP_DecryptUpdate(ctx,pt+i,&nWritten,ct+i,1))
+			ERR_print_errors_fp(stderr);
+	}
+
+	printf("decrypted %lu bytes:\n%s\n",len,pt);
+	EVP_CIPHER_CTX_free(ctx);
+    return pt;
+}
+
 /* demonstrates AES in counter mode */
-void testAES(unsigned char* key, unsigned char* iv)
+void testAES(unsigned char* key, unsigned char* iv, char* message)
 {
 	unsigned char ct[512];
 	unsigned char pt[512];
 	/* so you can see which bytes were written: */
 	memset(ct,0,512);
 	memset(pt,0,512);
-	char* message = "this is a test message :D";
 	size_t len = strlen(message);
 	/* encrypt: */
 	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
@@ -55,11 +109,6 @@ void testAES(unsigned char* key, unsigned char* iv)
 	ctx = EVP_CIPHER_CTX_new();
 	if (1!=EVP_DecryptInit_ex(ctx,EVP_aes_256_ctr(),0,key,iv))
 		ERR_print_errors_fp(stderr);
-	#if 0
-	if (1!=EVP_DecryptUpdate(ctx,pt,&nWritten,ct,ctlen))
-		ERR_print_errors_fp(stderr);
-	printf("decrypted %i bytes:\n%s\n",nWritten,pt);
-	#endif
 	for (size_t i = 0; i < len; i++) {
 		if (1!=EVP_DecryptUpdate(ctx,pt+i,&nWritten,ct+i,1))
 			ERR_print_errors_fp(stderr);
