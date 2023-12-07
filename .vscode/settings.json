@@ -4,6 +4,7 @@
     "session-key.h": "c",
     "rsa.h": "c",
     "aes.h": "c",
-    "hmac.h": "c"
+    "hmac.h": "c",
+    "system_error": "c"
   }
 }

@@ -1,8 +1,6 @@
 #include <openssl/rsa.h>
 #include "rsa.h"
 
-
-
 static RSA* readPublicKeyFromFile(char* publicKeyPath) {
     FILE* publicKeyFile = fopen(publicKeyPath, "r");
     if (!publicKeyFile) {

@@ -4,6 +4,8 @@
 #include <openssl/err.h>
 #include <string.h>
 #include "aes.h"
+#include "logging.h"
+#include "logging.c"
 
 static unsigned char* generateRandomBytes(int numberOfBytes){
     unsigned char* bytes = malloc(numberOfBytes);
@@ -28,10 +30,21 @@ struct AESCipher {
     unsigned char* ciphertext;
     int ciphertextLength;
     int plaintextLength;
+    unsigned char* initializationVector;
 };
 
-struct AESCipher AESencrypt(char* message, unsigned char* key, unsigned char* iv){
-	unsigned char* ct = malloc(512);
+int getAESCipherBufferSize() {
+    size_t bufferSize = 2 * sizeof(int) + AES_CIPHERTEXT_BUFFER_SIZE + AES_BLOCK_SIZE;
+
+    return bufferSize;
+}
+
+struct AESCipher AESencrypt(char* message, unsigned char* key){
+	unsigned char* ct = malloc(AES_CIPHERTEXT_BUFFER_SIZE);
+    unsigned char* iv = generateInitializationVector();
+
+    fprintf(stderr, "Encrypted with IV: ");
+    printHex(iv, AES_BLOCK_SIZE);
 
 	size_t len = strlen(message);
 
@@ -53,17 +66,23 @@ struct AESCipher AESencrypt(char* message, unsigned char* key, unsigned char* iv
     aesCipher.ciphertext = ct;
     aesCipher.ciphertextLength = ctlen;
     aesCipher.plaintextLength = len;
+    aesCipher.initializationVector = iv;
 
     return aesCipher;
 }
 
-unsigned char* AESdecrypt(struct AESCipher aesCipher, unsigned char* key, unsigned char* iv){
-    unsigned char* pt = malloc(512);
+unsigned char* AESdecrypt(struct AESCipher aesCipher, unsigned char* key){
+    unsigned char* pt = malloc(AES_CIPHERTEXT_BUFFER_SIZE);
 	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
 
     int nWritten = aesCipher.ciphertextLength;
     int len = aesCipher.plaintextLength;
     unsigned char* ct = aesCipher.ciphertext;
+    unsigned char* iv = aesCipher.initializationVector;
+
+    fprintf(stderr, "Decrypted with IV: ");
+    printHex(iv, AES_BLOCK_SIZE);
+
 
 	if (1!=EVP_DecryptInit_ex(ctx,EVP_aes_256_ctr(),0,key,iv))
 		ERR_print_errors_fp(stderr);
@@ -79,7 +98,7 @@ unsigned char* AESdecrypt(struct AESCipher aesCipher, unsigned char* key, unsign
 
 unsigned char* convertStructToBuffer(const struct AESCipher *crypto) {
     // Calculate the total size needed for the buffer
-    size_t bufferSize = sizeof(int) + sizeof(int) + 512;
+    size_t bufferSize = getAESCipherBufferSize();
 
     // Allocate memory for the buffer
     unsigned char *buffer = (unsigned char *)malloc(bufferSize);
@@ -101,6 +120,10 @@ unsigned char* convertStructToBuffer(const struct AESCipher *crypto) {
 
     // Copy ciphertext to the buffer
     memcpy(buffer + offset, crypto->ciphertext, crypto->ciphertextLength);
+    offset += AES_CIPHERTEXT_BUFFER_SIZE;
+
+    //Copy initializationVector to the buffer
+    memcpy(buffer + offset, crypto->initializationVector, AES_BLOCK_SIZE);
 
     return buffer;
 }
@@ -118,8 +141,14 @@ struct AESCipher convertBufferToStruct(const unsigned char* buffer) {
     buffer += sizeof(int);
 
     // Allocate memory for the ciphertext array and copy data
-    crypto.ciphertext = (unsigned char *)malloc(512);
-    memcpy(crypto.ciphertext, buffer, 512);
+    crypto.ciphertext = (unsigned char *)malloc(AES_CIPHERTEXT_BUFFER_SIZE);
+    memcpy(crypto.ciphertext, buffer, AES_CIPHERTEXT_BUFFER_SIZE);
+    buffer += AES_CIPHERTEXT_BUFFER_SIZE;
+
+    // Allocate memory for the initializationVector array and copy data
+    crypto.initializationVector = (unsigned char *)malloc(AES_BLOCK_SIZE);
+    memcpy(crypto.initializationVector, buffer, AES_BLOCK_SIZE);
+
 
     return crypto;
 }

@@ -42,19 +42,7 @@ static int authenticated = 0;
 
 static unsigned char* clientAESKey;
 static unsigned char* serverAESKey;
-static unsigned char initializationVector[] = {
-    0x29, 0x2b, 0xb3, 0x54, 0x8f, 0x49, 0x63, 0xd4,
-    0x14, 0x65, 0x7b, 0xb8, 0x5b, 0xea, 0x34, 0x7e
-}; 
 
-
-static void printHex(unsigned char* data, size_t len)
-{
-	for (size_t i = 0; i < len; i++) {
-		printf("%02x",data[i]);
-	}
-	printf("\n");
-}
 
 static void error(const char *msg)
 {
@@ -167,15 +155,6 @@ int authenticateServer(){
 	}
 
 
-	fprintf(stderr, "Client key: ");
-	printHex(clientAESKey, AES_KEY_LENGTH);
-
-	fprintf(stderr, "Server key: ");
-	printHex(serverAESKey, AES_KEY_LENGTH);
-
-	fprintf(stderr, "Initialization vector: ");
-	printHex(initializationVector, AES_BLOCK_SIZE);
-
 	free(clientConfirmation);
 	free(proposed_session_key_ciphertext);
 	return 0;
@@ -186,7 +165,6 @@ static int authenticateClient(){
 	const char* serverPublicKeyPath = "./keys/server/public.pem";
 
 	clientAESKey = generateAESKey();
-	printHex(clientAESKey, AES_KEY_LENGTH);
 
 	if(clientAESKey == NULL){
 		fprintf(stderr, "Error generating AES key.\n");
@@ -350,10 +328,12 @@ static void sendMessage(GtkWidget* w /* <-- msg entry widget */, gpointer /* dat
 
 	unsigned char* key = isclient ? clientAESKey : serverAESKey;
 	
-	const struct AESCipher encryptedMessage = AESencrypt(message, key, initializationVector);
+	const struct AESCipher encryptedMessage = AESencrypt(message, key);
+	fprintf(stderr, "Encrypted message: %02x\n", encryptedMessage.ciphertext[0]);
+	fprintf(stderr, "Encrypted message length: %d\n", encryptedMessage.ciphertextLength);
 
 	unsigned char* buffer = convertStructToBuffer(&encryptedMessage);
-	size_t totalSize = 512 + 2 * sizeof(int);
+	size_t totalSize = getAESCipherBufferSize();
 
 	if ((nbytes = send(sockfd,buffer,totalSize,0)) == -1)
 		error("send failed");
@@ -478,7 +458,7 @@ int main(int argc, char *argv[])
  * main loop for processing: */
 void* recvMsg(void*)
 {
-	size_t maxlen = 512 + 2 * sizeof(int);
+	size_t maxlen = getAESCipherBufferSize();
 	unsigned char input[maxlen]; /* might add \n and \0 */
 	ssize_t nbytes;
 	while (1) {
@@ -491,11 +471,13 @@ void* recvMsg(void*)
 		}
 
 		struct AESCipher aesCipher = convertBufferToStruct(input);
+		fprintf(stderr, "Encrypted message: %02x\n", aesCipher.ciphertext[0]);
+		fprintf(stderr, "Encrypted message length: %d\n", aesCipher.ciphertextLength);
 		int plainTextLength = aesCipher.plaintextLength;
 
 		unsigned char* key = isclient ? serverAESKey : clientAESKey;
 
-		unsigned char* m = AESdecrypt(aesCipher, key, initializationVector);
+		unsigned char* m = AESdecrypt(aesCipher, key);
 		
 
 		if (m[plainTextLength - 1] != '\n')
