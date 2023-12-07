@@ -313,8 +313,6 @@ static void tsappend(char* message, char** tagnames, int ensurenewline)
 
 static void sendMessage(GtkWidget* w /* <-- msg entry widget */, gpointer /* data */)
 {
-	char* tags[2] = {"self",NULL};
-	tsappend("me: ",tags,0);
 	GtkTextIter mstart; /* start of message pointer */
 	GtkTextIter mend;   /* end of message pointer */
 	gtk_text_buffer_get_start_iter(mbuf,&mstart);
@@ -325,6 +323,16 @@ static void sendMessage(GtkWidget* w /* <-- msg entry widget */, gpointer /* dat
 	 * thread and have it call this once the message is actually sent. */
 	ssize_t nbytes;
 
+	int messageMaximumExceeded = len >= AES_CIPHERTEXT_BUFFER_SIZE;
+
+	char* tags[2] = {messageMaximumExceeded ? "error" : "self", NULL};
+
+	if(messageMaximumExceeded){
+		tsappend("Your message is too long.\n",tags,0);
+		return;
+	}
+
+	tsappend("me: ",tags,0);
 
 	unsigned char* key = isclient ? clientAESKey : serverAESKey;
 	
@@ -338,7 +346,7 @@ static void sendMessage(GtkWidget* w /* <-- msg entry widget */, gpointer /* dat
 	if ((nbytes = send(sockfd,buffer,totalSize,0)) == -1)
 		error("send failed");
 
-	tsappend(message,NULL,1);
+	tsappend(message,NULL,2);
 	free(message);
 	/* clear message text and reset focus */
 	gtk_text_buffer_delete(mbuf,&mstart,&mend);
@@ -442,6 +450,7 @@ int main(int argc, char *argv[])
 	gtk_text_buffer_create_tag(tbuf,"status","foreground","#657b83","font","italic",NULL);
 	gtk_text_buffer_create_tag(tbuf,"friend","foreground","#6c71c4","font","bold",NULL);
 	gtk_text_buffer_create_tag(tbuf,"self","foreground","#268bd2","font","bold",NULL);
+	gtk_text_buffer_create_tag(tbuf, "error", "foreground", "#dc322f", "font", "bold", NULL);
 
 	/* start receiver thread: */
 	if (pthread_create(&trecv,0,recvMsg,0)) {
