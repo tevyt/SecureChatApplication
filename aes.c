@@ -31,11 +31,13 @@ struct AESCipher {
     int ciphertextLength;
     int plaintextLength;
     unsigned char* initializationVector;
+    unsigned char* signature;
 };
 
 int getAESCipherBufferSize() {
-    size_t bufferSize = 2 * sizeof(int) + AES_CIPHERTEXT_BUFFER_SIZE + AES_BLOCK_SIZE;
-
+    size_t bufferSize = sizeof(int) + sizeof(int) + AES_CIPHERTEXT_BUFFER_SIZE +
+                  AES_BLOCK_SIZE + SHA256_DIGEST_LENGTH;
+    
     return bufferSize;
 }
 
@@ -46,7 +48,9 @@ struct AESCipher AESencrypt(char* message, unsigned char* key){
     fprintf(stderr, "Encrypted with IV: ");
     printHex(iv, AES_BLOCK_SIZE);
 
+    fprintf(stderr, "Message: %s\n", message);
 	size_t len = strlen(message);
+    fprintf(stderr, "Len::::%d\n", len);
 
 	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
 
@@ -66,6 +70,7 @@ struct AESCipher AESencrypt(char* message, unsigned char* key){
     aesCipher.ciphertext = ct;
     aesCipher.ciphertextLength = ctlen;
     aesCipher.plaintextLength = len;
+    fprintf(stderr, "Len during encryption:\n", len);
     aesCipher.initializationVector = iv;
 
     return aesCipher;
@@ -79,6 +84,7 @@ unsigned char* AESdecrypt(struct AESCipher aesCipher, unsigned char* key){
     int len = aesCipher.plaintextLength;
     unsigned char* ct = aesCipher.ciphertext;
     unsigned char* iv = aesCipher.initializationVector;
+    fprintf(stderr, "Len during decryption:\n", len);
 
     fprintf(stderr, "Decrypted with IV: ");
     printHex(iv, AES_BLOCK_SIZE);
@@ -97,33 +103,26 @@ unsigned char* AESdecrypt(struct AESCipher aesCipher, unsigned char* key){
 }
 
 unsigned char* convertStructToBuffer(const struct AESCipher *crypto) {
-    // Calculate the total size needed for the buffer
-    size_t bufferSize = getAESCipherBufferSize();
 
     // Allocate memory for the buffer
-    unsigned char *buffer = (unsigned char *)malloc(bufferSize);
-    if (buffer == NULL) {
-        // Handle memory allocation failure
-        return NULL;
-    }
+    unsigned char* buffer = (unsigned char*)malloc(getAESCipherBufferSize());
 
-    // Copy the struct members to the buffer
-    size_t offset = 0;
+    // Copy data to the buffer
+    unsigned char* ptr = *buffer;
 
-    // Copy ciphertextLength to the buffer
-    memcpy(buffer + offset, &(crypto->ciphertextLength), sizeof(int));
-    offset += sizeof(int);
+    memcpy(ptr, &(crypto->ciphertextLength), sizeof(int));
+    ptr += sizeof(int);
 
-    // Copy plaintextLength to the buffer
-    memcpy(buffer + offset, &(crypto->plaintextLength), sizeof(int));
-    offset += sizeof(int);
+    memcpy(ptr, &(crypto->plaintextLength), sizeof(int));
+    ptr += sizeof(int);
 
-    // Copy ciphertext to the buffer
-    memcpy(buffer + offset, crypto->ciphertext, crypto->ciphertextLength);
-    offset += AES_CIPHERTEXT_BUFFER_SIZE;
+    memcpy(ptr, crypto->ciphertext, AES_CIPHERTEXT_BUFFER_SIZE);
+    ptr += AES_CIPHERTEXT_BUFFER_SIZE;
 
-    //Copy initializationVector to the buffer
-    memcpy(buffer + offset, crypto->initializationVector, AES_BLOCK_SIZE);
+    memcpy(ptr, crypto->initializationVector, AES_BLOCK_SIZE);
+    ptr += AES_BLOCK_SIZE;
+
+    memcpy(ptr, crypto->signature, SHA_DIGEST_LENGTH);
 
     return buffer;
 }
@@ -132,22 +131,27 @@ unsigned char* convertStructToBuffer(const struct AESCipher *crypto) {
 struct AESCipher convertBufferToStruct(const unsigned char* buffer) {
     struct AESCipher crypto;
 
+    size_t offset = 0; 
     // Read ciphertextLength from the buffer
     memcpy(&(crypto.ciphertextLength), buffer, sizeof(int));
-    buffer += sizeof(int);
+    offset += sizeof(int);
 
     // Read plaintextLength from the buffer
-    memcpy(&(crypto.plaintextLength), buffer, sizeof(int));
-    buffer += sizeof(int);
+    memcpy(&(crypto.plaintextLength), buffer + offset, sizeof(int));
+    offset += sizeof(int);
 
     // Allocate memory for the ciphertext array and copy data
     crypto.ciphertext = (unsigned char *)malloc(AES_CIPHERTEXT_BUFFER_SIZE);
-    memcpy(crypto.ciphertext, buffer, AES_CIPHERTEXT_BUFFER_SIZE);
-    buffer += AES_CIPHERTEXT_BUFFER_SIZE;
+    memcpy(crypto.ciphertext, buffer + offset, AES_CIPHERTEXT_BUFFER_SIZE);
+    offset += AES_CIPHERTEXT_BUFFER_SIZE;
 
     // Allocate memory for the initializationVector array and copy data
     crypto.initializationVector = (unsigned char *)malloc(AES_BLOCK_SIZE);
-    memcpy(crypto.initializationVector, buffer, AES_BLOCK_SIZE);
+    memcpy(crypto.initializationVector, buffer + offset, AES_BLOCK_SIZE);
+    offset += AES_BLOCK_SIZE;
+
+    crypto.signature = (unsigned char *)malloc(SHA256_DIGEST_LENGTH);
+    memcpy(crypto.signature, buffer + offset, SHA256_DIGEST_LENGTH);
 
 
     return crypto;

@@ -15,6 +15,7 @@
 
 #include <openssl/rsa.h>
 #include "rsa.c"
+#include "sha.c"
 
 #ifndef PATH_MAX
 #define PATH_MAX 1024
@@ -336,9 +337,13 @@ static void sendMessage(GtkWidget* w /* <-- msg entry widget */, gpointer /* dat
 
 	unsigned char* key = isclient ? clientAESKey : serverAESKey;
 	
-	const struct AESCipher encryptedMessage = AESencrypt(message, key);
-	fprintf(stderr, "Encrypted message: %02x\n", encryptedMessage.ciphertext[0]);
-	fprintf(stderr, "Encrypted message length: %d\n", encryptedMessage.ciphertextLength);
+
+	struct AESCipher encryptedMessage = AESencrypt(message, key);
+	const unsigned char* signature = signMessage(message, encryptedMessage.plaintextLength, encryptedMessage.ciphertextLength, encryptedMessage.initializationVector);
+	encryptedMessage.signature = signature;
+
+	printHex(signature, SHA256_DIGEST_LENGTH);
+
 
 	unsigned char* buffer = convertStructToBuffer(&encryptedMessage);
 	size_t totalSize = getAESCipherBufferSize();
@@ -486,12 +491,19 @@ void* recvMsg(void*)
 
 		unsigned char* key = isclient ? serverAESKey : clientAESKey;
 
-		unsigned char* m = AESdecrypt(aesCipher, key);
+		fprintf(stderr,"About to decrypt message: %d\n", plainTextLength);
+		unsigned char* m = malloc(plainTextLength + 2);
+
+		memcpy(m, AESdecrypt(aesCipher, key), plainTextLength);
+		fprintf(stderr, "Decrypted message\n");
+
 		
 
+		fprintf(stderr, "About to make readable");
 		if (m[plainTextLength - 1] != '\n')
 			m[plainTextLength] = '\n';
 		m[plainTextLength + 1] = 0;
+		fprintf(stderr, "Made readable");
 
 		//If authentication is complete write the message, otherwise wait for authentication to complete
 		g_main_context_invoke(NULL,shownewmessage,(gpointer)m);
